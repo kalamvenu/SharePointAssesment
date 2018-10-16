@@ -17,15 +17,17 @@ namespace SharePointProject
     {
         static void Main(string[] args)
         {
-            string userName = "venu.kalam@acuvate.com";
+
+            Console.WriteLine("enter the username");
+            string userName = Console.ReadLine();
             Console.WriteLine("Enter your password.");
-            SecureString password = GetPassword();
+            SecureString passWord = GetPassword();
             bool IsError = true;
 
             using (var clientContext = new ClientContext("https://acuvatehyd.sharepoint.com/teams/VenuProject13102018/"))
             {
 
-                clientContext.Credentials = new SharePointOnlineCredentials(userName, password);
+                clientContext.Credentials = new SharePointOnlineCredentials(userName, passWord);
 
                 try
                 {
@@ -38,20 +40,20 @@ namespace SharePointProject
                     camlQuery.ViewXml = @"<View Scope='Recursive'><Query></Query></View>";
                     camlQuery.FolderServerRelativeUrl = "/teams/VenuProject13102018/Shared%20Documents";
 
-                    ListItemCollection listitems = list.GetItems(camlQuery);
+                    ListItemCollection ListItems = list.GetItems(camlQuery);
 
-                    clientContext.Load(listitems, items => items.Include(i => i["Title"]));
+                    clientContext.Load(ListItems, Items => Items.Include(i => i["Title"]));
                     clientContext.ExecuteQuery();
-                    for (int i = 0; i < listitems.Count; i++)
+                    for (int i = 0; i < ListItems.Count; i++)
                     {
-                        SP.ListItem itemOfInterest = listitems[i];
-                        if (itemOfInterest["Title"] != null)
+                        SP.ListItem ExcelItem = ListItems[i];
+                        if (ExcelItem["Title"] != null)
                         {
-                            string fileName = itemOfInterest["Title"].ToString();
+                            string ExcelFileName = ExcelItem["Title"].ToString();
                             if (i == 0)
                             {
 
-                                ReadExcelData(clientContext, fileName);
+                                ReadExcelData(clientContext, ExcelFileName);
                             }
                         }
                     }
@@ -61,7 +63,7 @@ namespace SharePointProject
                 {
                     IsError = true;
                     Console.WriteLine(e.Message);
-                    Console.WriteLine("first catch block main");
+                    
                 }
                 finally
                 {
@@ -78,8 +80,8 @@ namespace SharePointProject
 
         }
 
-
-        private static void ReadExcelData(ClientContext clientContext, string fileName)
+        // method to read the data from excel file
+        private static void ReadExcelData(ClientContext clientContext, string ExcelFileName)
         {
 
             bool IsError = true;
@@ -156,7 +158,7 @@ namespace SharePointProject
                     }
 
                 }
-                UpdateSPList(clientContext, dataTable, fileName);
+                UpdateSPList(clientContext, dataTable, ExcelFileName);
 
                 IsError = false;
             }
@@ -164,7 +166,7 @@ namespace SharePointProject
             {
                 IsError = true;
                 Console.WriteLine(e.Message);
-                Console.WriteLine("second catch block");
+              
             }
             finally
             {
@@ -176,7 +178,7 @@ namespace SharePointProject
         }
 
 
-
+        // method to upload files to document library
         private static void UpdateSPList(ClientContext clientContext, DataTable dataTable, string fileName)
         {
             string currentPath = "";
@@ -212,47 +214,64 @@ namespace SharePointProject
 
                 foreach (DataRow row in dataTable.Rows)
                 {
-                    if (count++ == 0)
-                        continue;
 
-                    currentPath = row[0].ToString();
-
-                    string filee = row[0].ToString();
-
-                    string filename = filee.Split('\\').Last();
-                    System.IO.FileInfo filesize = new System.IO.FileInfo(row[0].ToString());
-
-                    long size = filesize.Length;
-                    string exten = filesize.Extension;
-                    Type type = filesize.GetType();
-                    if ((size / 1048576.0) > 0 && (size / 1048576.0) < 15)
+                    try
                     {
+                        if (count++ == 0)
+                            continue;
 
-                        
+                        currentPath = row[0].ToString();
 
-                        var fileCreationInformation = new FileCreationInformation();
-                        fileCreationInformation.Content = System.IO.File.ReadAllBytes(row[0].ToString());
+                        string filee = row[0].ToString();
+
+                        string filename = filee.Split('\\').Last();
+                        System.IO.FileInfo filesize = new System.IO.FileInfo(row[0].ToString());
+
+                        long size = filesize.Length;
+                        string exten = filesize.Extension;
+                        Type type = filesize.GetType();
+                        if ((size / 1048576.0) > 0 && (size / 1048576.0) < 15)
+                        {
 
 
-                        fileCreationInformation.Url = filename;
-                        Microsoft.SharePoint.Client.File file = oList.RootFolder.Files.Add(fileCreationInformation);
 
-                        clientContext.Load(file);
-                        var item = file.ListItemAllFields;
+                            var fileCreationInformation = new FileCreationInformation();
+                            fileCreationInformation.Content = System.IO.File.ReadAllBytes(row[0].ToString());
 
-                        item[lstColCreatedBy] = row[1].ToString();
 
-                        item[lstColType] = exten;
-                        item[lstColSize] = filesize.Length;
-                        item[lstcolStatus] = row[3].ToString();
-                        item[lstcolDepartment] = row[2].ToString();
-                        item.Update();
+                            fileCreationInformation.Url = filename;
+                            Microsoft.SharePoint.Client.File file = oList.RootFolder.Files.Add(fileCreationInformation);
 
-                        clientContext.ExecuteQuery();
+                            clientContext.Load(file);
+                            var item = file.ListItemAllFields;
 
-                        dataTable = DataTableUpdated(currentPath, "NA", "Success", dataTable);
+                            item[lstColCreatedBy] = row[1].ToString();
+
+                            item[lstColType] = exten;
+                            item[lstColSize] = filesize.Length;
+                            //  item[lstcolStatus] = row[3].ToString();
+                            string TemporaryString = row[3].ToString();
+                            string[] Multiple = TemporaryString.Split(',');
+                            item[lstcolStatus] = Multiple;
+                            item[lstcolDepartment] = row[2].ToString();
+                            item.Update();
+
+                            clientContext.ExecuteQuery();
+
+                            dataTable = DataTableUpdated(currentPath, "NA", "Success", dataTable);
+                        }
+
+                        else
+                        {
+                            throw new Exception("file size is large");
+                        }
+
                     }
-                    
+                    catch (Exception e)
+                    {
+                        dataTable = DataTableUpdated(currentPath, e.Message, "Failed", dataTable);
+                        Console.WriteLine(e.Message);
+                    }
                 }
 
                 isError = false;
@@ -271,7 +290,7 @@ namespace SharePointProject
                 }
             }
 
-           
+
 
             string FileLocation = DataTableToExcel(dataTable);
 
@@ -279,7 +298,7 @@ namespace SharePointProject
         }
 
 
-
+        // helper method to get the values from each cell in excel sheet
         private static string GetCellValue(ClientContext clientContext, SpreadsheetDocument document, Cell cell)
         {
             bool isError = true;
@@ -326,7 +345,7 @@ namespace SharePointProject
             return value;
         }
 
-
+        //method to convert data table to excel sheet
         static string DataTableToExcel(DataTable dataTable)
         {
             DataTable Table = dataTable.Copy();
@@ -362,6 +381,8 @@ namespace SharePointProject
             return ExcelFilePath;
         }
 
+
+        // method to upload the updated excel file along with reason and status
         static void UploadUpdatedExcelFile(ClientContext clientContext, String FileLocation)
         {
             try
@@ -371,23 +392,24 @@ namespace SharePointProject
                 clientContext.Load(list.RootFolder);
                 clientContext.ExecuteQuery();
                 var fileCreationInformation = new FileCreationInformation();
-                fileCreationInformation.Content = System.IO.File.ReadAllBytes(FileLocation+".xlsx");
+                fileCreationInformation.Content = System.IO.File.ReadAllBytes(FileLocation + ".xlsx");
                 string filee = FileLocation;
                 string filename = filee.Split('\\').Last();
-                fileCreationInformation.Url = filename+".xlsx";
+                fileCreationInformation.Url = filename + ".xlsx";
                 fileCreationInformation.Overwrite = true;
                 Microsoft.SharePoint.Client.File Excelfile = list.RootFolder.Files.Add(fileCreationInformation);
                 clientContext.Load(Excelfile);
                 clientContext.ExecuteQuery();
-    
+
             }
             catch (Exception ex)
             {
                 throw new Exception(ex.Message);
             }
-            
+
         }
 
+        // method to update the data table along with reason and status
         static DataTable DataTableUpdated(String FilePath, String Reason, String Status, DataTable dataTable)
         {
             DataTable Datatable = dataTable;
@@ -641,7 +663,7 @@ namespace SharePointProject
         //}
 
 
-
+            // method to read the password
 
         private static SecureString GetPassword()
         {
